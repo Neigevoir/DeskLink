@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>DeskLink Client</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #000;
+      display: flex;
+      flex-direction: column;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #join-panel { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.92); display: flex; align-items: center; justify-content: center; z-index: 20; flex-direction: column; gap: 12px; }
+    #join-panel h2 { color: #ccc; font-size: 22px; }
+    #join-panel input { padding: 12px 16px; font-size: 20px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #eee; text-align: center; letter-spacing: 8px; text-transform: uppercase; width: 180px; outline: none; }
+    #join-panel button { padding: 12px 40px; background: #0f3460; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 600; }
+    #join-panel .hint { color: #666; font-size: 13px; }
+    #status { padding: 8px 12px; background: #111; color: #888; font-size: 12px; flex-shrink: 0; text-align: center; }
+    #screen-container { flex: 1; display: flex; align-items: center; justify-content: center; background: #0a0a0a; touch-action: none; }
+    video { width: 100%; height: 100%; object-fit: contain; }
+    .placeholder { color: #333; font-size: 16px; text-align: center; padding: 20px; line-height: 1.6; }
+    .placeholder small { display: block; margin-top: 8px; font-size: 12px; color: #444; }
+    #chat-toggle { position: fixed; bottom: 12px; right: 12px; z-index: 10; width: 44px; height: 44px; border-radius: 50%; background: #0f3460; color: #fff; border: none; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    #chat-panel { position: fixed; bottom: 0; left: 0; right: 0; z-index: 9; background: #111; border-top: 1px solid #222; display: none; flex-direction: column; max-height: 50vh; }
+    #chat-panel.open { display: flex; }
+    #chat-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid #222; }
+    #chat-header span { font-size: 14px; font-weight: 600; color: #ccc; }
+    #chat-header button { background: none; border: none; color: #888; font-size: 18px; cursor: pointer; }
+    .chat-messages { flex: 1; overflow-y: auto; padding: 8px 12px; min-height: 80px; }
+    .chat-msg { margin-bottom: 6px; font-size: 13px; color: #ccc; }
+    .chat-sender { font-weight: 600; color: #4a9eff; }
+    .chat-sender.self { color: #e94560; }
+    .chat-input-row { display: flex; padding: 8px 12px; gap: 6px; border-top: 1px solid #222; }
+    .chat-input-row input { flex: 1; padding: 8px; border-radius: 4px; border: 1px solid #333; background: #1a1a1a; color: #eee; font-size: 14px; outline: none; }
+    .chat-input-row button { padding: 8px 14px; background: #0f3460; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
+    @media (max-width: 600px) { #status { font-size: 10px; padding: 4px 8px; } }
+  </style>
+</head>
+<body>
+  <div id="join-panel">
+    <h2>DeskLink</h2>
+    <input type="text" id="roomInput" placeholder="Code" maxlength="4" autofocus />
+    <button id="connectBtn">Connect</button>
+    <span class="hint">Enter the room code from the Agent</span>
+  </div>
+
+  <div id="status">Status: Ready</div>
+  <div id="screen-container">
+    <div class="placeholder">Waiting for remote desktop...<br/><small>Connect to a room to begin</small></div>
+  </div>
+
+  <button id="chat-toggle" onclick="document.getElementById('chat-panel').classList.toggle('open')">&#128172;</button>
+  <div id="chat-panel">
+    <div id="chat-header">
+      <span>Messages</span>
+      <button onclick="document.getElementById('chat-panel').classList.toggle('open')">&times;</button>
+    </div>
+    <div class="chat-messages" id="chat-messages"></div>
+    <div class="chat-input-row">
+      <input type="text" id="msgInput" placeholder="Type a message..." />
+      <button id="sendBtn">Send</button>
+    </div>
+  </div>
+
+  <script type="module">
+    import { MessageType, signalUrl } from '/shared/protocol.js';
+    import { SignalingClient } from '/shared/signaling.js';
+    import { WebRTCManager } from '/shared/webrtc.js';
+
+    // ---- State ----
+    let signaling, webrtc;
+
+    // ---- DOM refs ----
+    const statusEl = document.getElementById('status');
+    const screenContainer = document.getElementById('screen-container');
+    const roomInput = /** @type {HTMLInputElement} */ (document.getElementById('roomInput'));
+    const connectBtn = document.getElementById('connectBtn');
+    const joinPanel = document.getElementById('join-panel');
+    const chatMessages = document.getElementById('chat-messages');
+    const msgInput = /** @type {HTMLInputElement} */ (document.getElementById('msgInput'));
+    const sendBtn = document.getElementById('sendBtn');
+
+    function setStatus(text) {
+      statusEl.textContent = 'Status: ' + text;
+    }
+
+    // ---- Chat (inline — mobile chat is simple enough) ----
+    function addMessage(msg, isSelf) {
+      const div = document.createElement('div');
+      div.className = 'chat-msg';
+      div.innerHTML = `<span class="chat-sender${isSelf ? ' self' : ''}">${msg.sender}:</span> ${msg.text}`;
+      chatMessages.appendChild(div);
+      div.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function sendChat() {
+      const text = msgInput.value.trim();
+      if (!text || !webrtc) return;
+      webrtc.sendData({ sender: 'Client', text, timestamp: Date.now() });
+      addMessage({ sender: 'Client', text }, true);
+      msgInput.value = '';
+    }
+    sendBtn.onclick = sendChat;
+    msgInput.onkeydown = (e) => { if (e.key === 'Enter') sendChat(); };
+
+    // ---- Connect to room ----
+    connectBtn.onclick = () => {
+      const code = roomInput.value.trim().toUpperCase();
+      if (!code) return;
+      joinPanel.style.display = 'none';
+      setupConnection(code);
+    };
+    roomInput.onkeydown = (e) => { if (e.key === 'Enter') connectBtn.click(); };
+
+    function setupConnection(code) {
+      signaling = new SignalingClient({
+        url: signalUrl(location.hostname, parseInt(location.port) || 3099),
+        onMessage: async (msg) => {
+          switch (msg.type) {
+            case MessageType.JOIN_SUCCESS:
+              setStatus('Joined room ' + code + ', waiting for agent...');
+              break;
+            case MessageType.JOIN_ERROR:
+              setStatus('Join failed: ' + msg.error);
+              showJoinPanel();
+              break;
+            case MessageType.AGENT_READY:
+              setStatus('Agent found, setting up...');
+              setupWebRTC();
+              break;
+            case MessageType.OFFER:
+              if (!webrtc) setupWebRTC();
+              await webrtc.handleOffer(msg.sdp);
+              setStatus('Connected');
+              break;
+            case MessageType.ICE_CANDIDATE:
+              if (msg.candidate && webrtc) await webrtc.addIceCandidate(msg.candidate);
+              break;
+            case MessageType.PEER_GONE:
+              setStatus('Agent disconnected');
+              cleanup();
+              showPlaceholder();
+              break;
+          }
+        },
+        onStateChange: (state) => {
+          if (state === 'disconnected') setStatus('Server disconnected');
+        },
+      });
+
+      signaling.connect();
+      signaling.send(MessageType.REGISTER, { role: 'client', room: code });
+      setStatus('Connecting to room ' + code + '...');
+    }
+
+    function setupWebRTC() {
+      webrtc = new WebRTCManager({
+        role: 'client',
+        onSignal: (msg) => {
+          if (msg.type === 'offer' || msg.type === 'answer' || msg.type === 'ice-candidate') {
+            signaling.send(msg.type, msg);
+          }
+        },
+        onTrack: (stream) => {
+          setStatus('Streaming');
+          screenContainer.innerHTML = '';
+          const video = document.createElement('video');
+          video.srcObject = stream;
+          video.autoplay = true;
+          video.playsInline = true;
+          video.muted = true;
+          screenContainer.appendChild(video);
+        },
+        onData: (data) => { addMessage(data, false); },
+        onStateChange: (state) => {
+          if (state === 'failed' || state === 'disconnected') {
+            setStatus('Connection lost');
+            showPlaceholder();
+          }
+        },
+      });
+    }
+
+    function cleanup() {
+      if (webrtc) { webrtc.destroy(); webrtc = null; }
+      if (signaling) { signaling.disconnect(); signaling = null; }
+    }
+
+    function showPlaceholder() {
+      screenContainer.innerHTML = '<div class="placeholder">Waiting for remote desktop...<br/><small>Connect to a room to begin</small></div>';
+    }
+
+    function showJoinPanel() {
+      cleanup();
+      showPlaceholder();
+      joinPanel.style.display = 'flex';
+    }
+  </script>
+</body>
+</html>

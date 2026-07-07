@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>DeskLink Agent</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, sans-serif; background: #1a1a2e; color: #eee; padding: 20px; display: flex; flex-direction: column; height: 100vh; }
+    h2 { margin-bottom: 12px; }
+    label { margin-bottom: 4px; font-size: 13px; color: #aaa; }
+    select { width: 100%; padding: 8px; margin-bottom: 10px; border-radius: 6px; border: 1px solid #444; background: #16213e; color: #eee; }
+    .btn-row { display: flex; gap: 10px; margin-bottom: 10px; }
+    button { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; }
+    .btn-start { background: #0f3460; color: #fff; }
+    .btn-stop  { background: #e94560; color: #fff; }
+    #roomCode { font-size: 16px; font-weight: 700; color: #4a9eff; text-align: center; margin-bottom: 6px; min-height: 22px; }
+    #status { font-size: 13px; color: #aaa; text-align: center; margin-bottom: 8px; }
+    video { width: 100%; max-height: 200px; border-radius: 8px; background: #000; flex-shrink: 0; margin-bottom: 10px; }
+    #chat { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+    .chat-messages { flex: 1; overflow-y: auto; background: #16213e; border-radius: 6px; padding: 8px; font-size: 12px; max-height: 120px; }
+    .chat-msg { margin-bottom: 6px; }
+    .chat-sender { font-weight: 600; color: #0f3460; }
+    .chat-sender.self { color: #e94560; }
+    .chat-input-row { display: flex; gap: 6px; margin-top: 6px; }
+    .chat-input-row input { flex: 1; padding: 6px 8px; border-radius: 6px; border: 1px solid #444; background: #16213e; color: #eee; font-size: 12px; outline: none; }
+    .chat-input-row button { padding: 6px 12px; font-size: 12px; background: #0f3460; color: #fff; }
+  </style>
+</head>
+<body>
+  <h2>DeskLink Agent</h2>
+  <label>Share:</label>
+  <select id="sourceSelect"><option value="">Loading sources...</option></select>
+  <div class="btn-row">
+    <button class="btn-start" id="startBtn">Start Sharing</button>
+    <button class="btn-stop"  id="stopBtn" disabled>Stop</button>
+  </div>
+  <div id="roomCode"></div>
+  <div id="status">Disconnected</div>
+  <video id="preview" autoplay muted></video>
+  <div id="chat"></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

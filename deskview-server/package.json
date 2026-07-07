@@ -1,0 +1,13 @@
+{
+  "name": "deskview-server",
+  "version": "1.0.0",
+  "description": "DeskLink signaling server",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  }
+}
