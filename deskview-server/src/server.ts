@@ -1,63 +1,38 @@
-/**
- * DeskLink signaling server — HTTP static file server + WebSocket signaling.
- *
- * Serves:
- *   /          → public/index.html (web client)
- *   /shared/   → ../../shared/ (ES modules for the web client)
- *
- * WebSocket routing:
- *   register { role: 'agent' }          → creates room, replies with room-created
- *   register { role: 'client', room }   → joins room, replies with join-success / join-error
- *   offer / answer / ice-candidate      → relayed to the other peer in the room
- *
- * @module deskview-server/src/server
- */
-
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { WebSocketServer } from 'ws';
-import { MessageType, generateRoomCode, createMessage } from '../../shared/protocol.js';
+import { WebSocketServer, type WebSocket } from 'ws';
+import { MessageType, generateRoomCode, createMessage, type SignalMessage } from '@desklink/shared';
 import { Room } from './room.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-/** @type {Map<string, Room>} */
-const rooms = new Map();
+const rooms = new Map<string, Room>();
 
-/**
- * Create and start the DeskLink server.
- * @param {number} port
- * @returns {http.Server}
- */
-export function createServer(port) {
+export function createServer(port: number): http.Server {
   const server = http.createServer((req, res) => {
     const url = new URL(req.url || '/', `http://${req.headers.host}`);
 
-    // Map /shared/* to the shared/ directory at the repo root
     if (url.pathname.startsWith('/shared/')) {
-      const filePath = path.join(__dirname, '..', '..', 'shared', url.pathname.slice('/shared/'.length));
+      const filePath = path.join(__dirname, '..', '..', 'shared', 'dist', url.pathname.slice('/shared/'.length));
       serveFile(res, filePath);
       return;
     }
 
-    // Everything else serves from public/
     let filePath = path.join(__dirname, 'public', url.pathname === '/' ? 'index.html' : url.pathname);
     serveFile(res, filePath);
   });
 
   const wss = new WebSocketServer({ server });
 
-  wss.on('connection', (ws) => {
-    /** @type {Room|null} */
-    let currentRoom = null;
+  wss.on('connection', (ws: WebSocket) => {
+    let currentRoom: Room | null = null;
 
-    ws.on('message', (data) => {
-      /** @type {any} */
-      let msg;
+    ws.on('message', (data: Buffer) => {
+      let msg: SignalMessage;
       try {
-        msg = JSON.parse(data.toString());
+        msg = JSON.parse(data.toString()) as SignalMessage;
       } catch (_) {
         return;
       }
@@ -75,7 +50,7 @@ export function createServer(port) {
               console.log(`Room ${code}: agent joined`);
             }
           } else if (msg.role === 'client') {
-            const room = rooms.get(msg.room);
+            const room = rooms.get(msg.room as string);
             if (!room) {
               ws.send(JSON.stringify(createMessage(MessageType.JOIN_ERROR, { error: 'Room not found' })));
               return;
@@ -120,7 +95,7 @@ export function createServer(port) {
 
 // ---- Helpers ----
 
-const MIME = {
+const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'application/javascript',
   '.css': 'text/css',
@@ -128,11 +103,7 @@ const MIME = {
   '.svg': 'image/svg+xml',
 };
 
-/**
- * @param {http.ServerResponse} res
- * @param {string} filePath
- */
-function serveFile(res, filePath) {
+function serveFile(res: http.ServerResponse, filePath: string): void {
   const ext = path.extname(filePath);
   const contentType = MIME[ext] || 'application/octet-stream';
 

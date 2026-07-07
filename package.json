@@ -1,0 +1,19 @@
+{
+  "name": "desklink",
+  "private": true,
+  "workspaces": [
+    "shared",
+    "deskview-server",
+    "deskview-agent",
+    "deskview-client"
+  ],
+  "scripts": {
+    "build:shared": "npm -w @desklink/shared run build",
+    "dev:server": "npm -w @desklink/server run dev",
+    "dev:agent": "npm -w @desklink/agent run dev",
+    "dev:client": "npm -w @desklink/client run dev"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0"
+  }
+}

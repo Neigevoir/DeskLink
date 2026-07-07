@@ -7,16 +7,16 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, sans-serif; background: #0a0a0a; overflow: hidden; display: flex; flex-direction: column; height: 100vh; }
     #status-bar { padding: 6px 12px; background: #111; color: #888; font-size: 12px; flex-shrink: 0; }
-    #join-panel { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 20; flex-direction: column; gap: 12px; }
-    #join-panel h2 { color: #ccc; font-size: 20px; }
-    #join-panel input { padding: 10px 14px; font-size: 18px; border-radius: 6px; border: 1px solid #333; background: #1a1a1a; color: #eee; text-align: center; letter-spacing: 6px; text-transform: uppercase; width: 160px; outline: none; }
-    #join-panel button { padding: 10px 30px; background: #0f3460; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 15px; font-weight: 600; }
-    #join-panel .hint { color: #666; font-size: 13px; }
-    #main-area { flex: 1; display: flex; min-height: 0; }
-    #screen-container { flex: 1; display: flex; align-items: center; justify-content: center; background: #000; }
+    .join-panel { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 20; flex-direction: column; gap: 12px; }
+    .join-panel h2 { color: #ccc; font-size: 20px; }
+    .join-panel input { padding: 10px 14px; font-size: 18px; border-radius: 6px; border: 1px solid #333; background: #1a1a1a; color: #eee; text-align: center; letter-spacing: 6px; text-transform: uppercase; width: 160px; outline: none; }
+    .join-panel button { padding: 10px 30px; background: #0f3460; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 15px; font-weight: 600; }
+    .join-panel .hint { color: #666; font-size: 13px; }
+    .main-area { flex: 1; display: flex; min-height: 0; }
+    .screen-container { flex: 1; display: flex; align-items: center; justify-content: center; background: #000; }
     video { width: 100%; height: 100%; object-fit: contain; }
     .placeholder { color: #555; font-size: 18px; }
-    #chat-panel { width: 280px; display: flex; flex-direction: column; background: #111; border-left: 1px solid #222; flex-shrink: 0; }
+    .chat-panel { width: 280px; display: flex; flex-direction: column; background: #111; border-left: 1px solid #222; flex-shrink: 0; }
     .chat-messages { flex: 1; overflow-y: auto; padding: 8px; }
     .chat-msg { margin-bottom: 6px; font-size: 13px; color: #ccc; }
     .chat-sender { font-weight: 600; color: #4a9eff; }
@@ -27,21 +27,7 @@
   </style>
 </head>
 <body>
-  <div id="join-panel">
-    <h2>DeskLink</h2>
-    <input type="text" id="roomInput" placeholder="Room code" maxlength="4" autofocus />
-    <button id="connectBtn">Connect</button>
-    <span class="hint">Enter the 4-letter code shown on the Agent</span>
-  </div>
-
-  <div id="status-bar">Status: Ready</div>
-  <div id="main-area">
-    <div id="screen-container">
-      <span class="placeholder">Waiting for remote screen...</span>
-    </div>
-    <div id="chat-panel"></div>
-  </div>
-
-  <script type="module" src="app.js"></script>
+  <div id="root" style="display:flex;flex-direction:column;flex:1;min-height:0;"></div>
+  <script type="module" src="./src/main.tsx"></script>
 </body>
 </html>

@@ -45,3 +45,6 @@ functions/**/*.js
 
 # Panda CSS
 src/styled-system
+
+dist
+out

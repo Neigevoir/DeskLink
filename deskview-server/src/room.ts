@@ -1,39 +1,17 @@
-/**
- * Room — manages one agent-client pair within the signaling server.
- *
- * Each room has exactly one agent and one client WebSocket.
- * Messages from one peer are relayed to the other.
- * When a peer disconnects, the remaining peer is notified.
- *
- * @module deskview-server/src/room
- */
-
-import { MessageType, createMessage } from '../../shared/protocol.js';
+import { MessageType, createMessage } from '@desklink/shared';
+import type { WebSocket } from 'ws';
+import type { SignalMessage } from '@desklink/shared';
 
 export class Room {
-  /** @type {string} */
-  id;
-  /** @type {import('ws').WebSocket|null} */
-  agent;
-  /** @type {import('ws').WebSocket|null} */
-  client;
+  id: string;
+  agent: WebSocket | null = null;
+  client: WebSocket | null = null;
 
-  /**
-   * @param {string} id
-   */
-  constructor(id) {
+  constructor(id: string) {
     this.id = id;
-    this.agent = null;
-    this.client = null;
   }
 
-  /**
-   * Register a peer in this room.
-   * @param {import('ws').WebSocket} ws
-   * @param {'agent'|'client'} role
-   * @returns {{ ok: boolean, error?: string }}
-   */
-  register(ws, role) {
+  register(ws: WebSocket, role: 'agent' | 'client'): { ok: boolean; error?: string } {
     if (role === 'agent') {
       if (this.agent) return { ok: false, error: 'Room already has an agent' };
       this.agent = ws;
@@ -57,11 +35,7 @@ export class Room {
     return { ok: false, error: 'Unknown role' };
   }
 
-  /**
-   * Remove a peer from the room and notify the other side.
-   * @param {import('ws').WebSocket} ws
-   */
-  unregister(ws) {
+  unregister(ws: WebSocket): void {
     if (ws === this.agent) {
       this.agent = null;
       if (this.client && this.client.readyState === 1) {
@@ -75,29 +49,18 @@ export class Room {
     }
   }
 
-  /**
-   * Relay a message from one peer to the other.
-   * @param {import('ws').WebSocket} from
-   * @param {object} message
-   */
-  relay(from, message) {
+  relay(from: WebSocket, message: SignalMessage): void {
     const peer = this.getPeer(from);
     if (peer && peer.readyState === 1) {
       peer.send(JSON.stringify(message));
     }
   }
 
-  /**
-   * Get the other peer in this room.
-   * @param {import('ws').WebSocket} ws
-   * @returns {import('ws').WebSocket|null}
-   */
-  getPeer(ws) {
+  getPeer(ws: WebSocket): WebSocket | null {
     return ws === this.agent ? this.client : ws === this.client ? this.agent : null;
   }
 
-  /** @returns {boolean} */
-  isEmpty() {
+  isEmpty(): boolean {
     return !this.agent && !this.client;
   }
 }

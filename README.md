@@ -1,81 +1,100 @@
 # DeskLink
 
-WebRTC-based remote desktop control demo with peer-to-peer chat. Built to demonstrate architecture design, module organization, and WebRTC proficiency.
+WebRTC-based remote desktop control demo with peer-to-peer chat.
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Shared protocol | TypeScript (compiled to JS for web client) |
+| Agent UI | Electron + React 19 + TypeScript |
+| Client UI | Electron + React 19 + TypeScript |
+| Web client | Vanilla JS (mobile-friendly, no build step) |
+| Signaling server | Node.js + TypeScript (run with tsx) |
+| Build tool | electron-vite 5 |
 
 ## Architecture
 
 ```
 ┌──────────────────────┐         ┌──────────────────────┐
 │    deskview-agent    │         │   deskview-client    │
-│    (Electron)        │         │   (Electron / Web)   │
+│    (Electron+React)  │         │   (Electron+React)   │
 │                      │         │                      │
 │  ┌────────────────┐  │         │  ┌────────────────┐  │
-│  │  renderer/app  │  │         │  │  renderer/app  │  │
-│  │  (thin glue)   │  │         │  │  (thin glue)   │  │
-│  └───────┬────────┘  │         │  └───────┬────────┘  │
-│          │ imports    │         │          │ imports    │
+│  │  App.tsx       │  │         │  │  App.tsx       │  │
+│  │  AgentView.tsx  │  │         │  │  JoinView.tsx  │  │
+│  │  ChatView.tsx   │  │         │  │  ClientView.tsx│  │
+│  └───────┬────────┘  │         │  │  ChatView.tsx   │  │
+│          │ imports    │         │  └───────┬────────┘  │
 │  ┌───────┴────────┐  │         │  ┌───────┴────────┐  │
-│  │   shared/       │  │         │  │   shared/       │  │
+│  │ @desklink/shared│  │         │  │ @desklink/shared│  │
 │  │  ┌───────────┐  │  │         │  │  ┌───────────┐  │  │
 │  │  │ signaling │  │◄├─────────┼─┼─►│ signaling │  │  │
 │  │  │ webrtc    │  │  │ WebRTC  │  │  │ webrtc    │  │  │
-│  │  │ chat      │  │  │ P2P     │  │  │ chat      │  │  │
-│  │  │ protocol  │  │  │─────────┼──┼─►│ protocol  │  │  │
-│  │  └───────────┘  │  │         │  │  └───────────┘  │  │
+│  │  │ protocol  │  │  │ P2P     │  │  │ protocol  │  │  │
+│  │  └───────────┘  │  │─────────┼──┼─►│           │  │  │
 │  └─────────────────┘  │         │  └─────────────────┘  │
-│         │              │         │         │              │
 └─────────┼──────────────┘         └─────────┼──────────────┘
           │                                  │
           │     deskview-server              │
           │     ┌──────────────┐             │
-          └────►│ room.js      │◄────────────┘
-                │ server.js    │
+          └────►│ room.ts      │◄────────────┘
+                │ server.ts    │
                 │ (WebSocket   │
                 │  signaling)  │
                 └──────────────┘
 ```
 
-### Key design decisions
-
-- **Zero build step** — ES modules work natively in Node 18+, Electron renderers, and modern browsers. JSDoc + `jsconfig.json` provides editor-level type checking without compilation.
-- **Shared modules eliminate duplication** — `SignalingClient`, `WebRTCManager`, and `ChatUI` live in `shared/` and are imported by all three clients (agent renderer, Electron client renderer, web client). Each client is a ~60-line `app.js` that wires shared modules to its DOM.
-- **Room-based signaling** — The server maps each agent-client pair to a room identified by a 4-letter human-readable code. Multiple sessions can coexist.
-- **Exponential-backoff reconnect** — `SignalingClient` retries with capped exponential backoff, demonstrating production readiness thinking.
-
 ## Project Structure
 
 ```
 DeskLink/
-├── shared/                     # Shared modules (imported by all clients)
-│   ├── protocol.js             # Message types, config, helpers
-│   ├── signaling.js            # SignalingClient (WebSocket + reconnect)
-│   ├── webrtc.js               # WebRTCManager (PeerConnection + DataChannel)
-│   └── chat.js                 # ChatUI (DOM component)
-├── deskview-server/            # Signaling server
+├── package.json                 # npm workspaces root
+├── tsconfig.base.json           # Shared TS compiler options
+├── shared/                      # @desklink/shared
 │   ├── src/
-│   │   ├── index.js            # Entry point
-│   │   ├── server.js           # HTTP + WSS factory
-│   │   ├── room.js             # Room (agent+client pair)
-│   │   └── public/index.html   # Web client (mobile-friendly)
+│   │   ├── index.ts             # Barrel export
+│   │   ├── protocol.ts          # Message types, config, helpers
+│   │   ├── signaling.ts         # SignalingClient (WebSocket + reconnect)
+│   │   ├── webrtc.ts            # WebRTCManager
+│   │   └── chat.ts              # ChatMessage type + helper
+│   └── dist/                    # Compiled JS for web client
+├── deskview-server/             # @desklink/server
+│   ├── src/
+│   │   ├── index.ts             # Entry point
+│   │   ├── server.ts            # HTTP + WSS factory
+│   │   ├── room.ts              # Room (agent+client pair)
+│   │   └── public/index.html    # Web client (mobile-friendly)
 │   └── package.json
-├── deskview-agent/             # Electron agent (screen capture)
+├── deskview-agent/              # @desklink/agent
+│   ├── electron.vite.config.ts
 │   ├── src/
-│   │   ├── main.js             # Electron main process
-│   │   ├── preload.js          # Context bridge
-│   │   └── renderer/
-│   │       ├── index.html      # Pure HTML+CSS
-│   │       └── app.js          # Thin controller (~60 lines)
-│   └── package.json
-├── deskview-client/            # Electron client (viewer)
-│   ├── src/
-│   │   ├── main.js
-│   │   ├── preload.js
+│   │   ├── main/index.ts        # Electron main process
+│   │   ├── preload/index.ts     # Context bridge
 │   │   └── renderer/
 │   │       ├── index.html
-│   │       └── app.js
+│   │       └── src/
+│   │           ├── main.tsx     # React entry
+│   │           ├── App.tsx      # Root component
+│   │           └── components/
+│   │               ├── AgentView.tsx
+│   │               └── ChatView.tsx
 │   └── package.json
-├── jsconfig.json               # Editor type checking (zero runtime cost)
-└── README.md
+└── deskview-client/             # @desklink/client
+    ├── electron.vite.config.ts
+    ├── src/
+    │   ├── main/index.ts
+    │   ├── preload/index.ts
+    │   └── renderer/
+    │       ├── index.html
+    │       └── src/
+    │           ├── main.tsx
+    │           ├── App.tsx
+    │           └── components/
+    │               ├── JoinView.tsx
+    │               ├── ClientView.tsx
+    │               └── ChatView.tsx
+    └── package.json
 ```
 
 ## Requirements
@@ -86,10 +105,10 @@ DeskLink/
 ## Install
 
 ```bash
-cd deskview-server && npm install
-cd ../deskview-agent && npm install
-cd ../deskview-client && npm install
+npm install
 ```
+
+A single `npm install` at the repo root installs all four workspace packages.
 
 ## Run
 
@@ -98,13 +117,13 @@ Open three terminals:
 ### 1. Signaling server
 
 ```bash
-cd deskview-server && npm start
+npm -w @desklink/server run dev
 ```
 
 ### 2. Agent (on the machine to be controlled)
 
 ```bash
-cd deskview-agent && npm start
+npm -w @desklink/agent run dev
 ```
 
 1. Select a screen/window from the dropdown
@@ -116,23 +135,31 @@ cd deskview-agent && npm start
 **Electron client:**
 
 ```bash
-cd deskview-client && npm start
+npm -w @desklink/client run dev
 ```
 
-Enter the room code → view remote screen + chat.
+Enter the room code -> view remote screen + chat.
 
 **Web client (mobile-friendly):**
 
-Open `http://<server-ip>:3099` in a browser. Enter the room code → view + chat.
+Open `http://<server-ip>:3099` in a browser. Enter the room code -> view + chat.
+
+## Build
+
+```bash
+npm run build:shared        # Compile shared/ TS to JS
+npm -w @desklink/agent run build   # Package agent for distribution
+npm -w @desklink/client run build  # Package client for distribution
+```
 
 ## WebRTC Flow
 
-1. Agent registers → server creates room, returns code
+1. Agent registers -> server creates room, returns code
 2. Client joins room with code
 3. Server notifies both peers when the room is ready
-4. Agent creates offer → server relays to client
-5. Client creates answer → server relays to agent
-6. ICE candidates exchanged → P2P connection established
+4. Agent creates offer -> server relays to client
+5. Client creates answer -> server relays to agent
+6. ICE candidates exchanged -> P2P connection established
 7. Video track + DataChannel (chat) flow directly between peers
 
 > Demo uses Google public STUN servers (LAN only). Cross-network needs a TURN server.
