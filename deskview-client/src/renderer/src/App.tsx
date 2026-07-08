@@ -3,10 +3,9 @@ import {
   MessageType,
   SignalingClient,
   WebRTCManager,
-  createChatMessage,
   signalUrl,
 } from '@desklink/shared';
-import type { ChatMessage, SignalMessage, SignalingState } from '@desklink/shared';
+import type { SignalMessage, SignalingState } from '@desklink/shared';
 import JoinView from './components/JoinView';
 import ClientView from './components/ClientView';
 
@@ -17,7 +16,6 @@ export default function App() {
   const [status, setStatus] = useState('Ready');
   const [isJoined, setIsJoined] = useState(false);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   const cleanup = useCallback(() => {
     webrtcRef.current?.destroy();
@@ -76,6 +74,10 @@ export default function App() {
     [cleanup],
   );
 
+  const handleControl = useCallback((msg: Record<string, unknown>) => {
+    webrtcRef.current?.sendData(msg);
+  }, []);
+
   const setupWebRTC = useCallback(() => {
     const webrtc = new WebRTCManager({
       role: 'client',
@@ -88,9 +90,6 @@ export default function App() {
         setRemoteStream(stream);
         setStatus('Viewing remote screen');
       },
-      onData: (data) => {
-        setMessages((prev) => [...prev, data as unknown as ChatMessage]);
-      },
       onStateChange: (state) => {
         if (state === 'failed' || state === 'disconnected') {
           setStatus('Connection lost');
@@ -101,12 +100,6 @@ export default function App() {
     webrtcRef.current = webrtc;
   }, []);
 
-  const handleChatSend = useCallback((text: string) => {
-    const msg = createChatMessage('Client', text);
-    webrtcRef.current?.sendData(msg as unknown as Record<string, unknown>);
-    setMessages((prev) => [...prev, msg]);
-  }, []);
-
   return (
     <>
       {!isJoined && <JoinView onConnect={handleConnect} />}
@@ -114,8 +107,7 @@ export default function App() {
       {isJoined ? (
         <ClientView
           remoteStream={remoteStream}
-          messages={messages}
-          onChatSend={handleChatSend}
+          onControl={handleControl}
         />
       ) : (
         <div className="main-area">

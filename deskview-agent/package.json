@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@desklink/shared": "*"
+    "@desklink/shared": "*",
+    "robotjs": "^0.7.1"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",

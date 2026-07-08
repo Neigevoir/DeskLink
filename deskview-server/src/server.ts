@@ -112,7 +112,11 @@ function serveFile(res: http.ServerResponse, filePath: string): void {
       res.writeHead(404);
       res.end('Not found');
     } else {
-      res.writeHead(200, { 'Content-Type': contentType });
+      res.writeHead(200, {
+        'Content-Type': contentType,
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+      });
       res.end(data);
     }
   });

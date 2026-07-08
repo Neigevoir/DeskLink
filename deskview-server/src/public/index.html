@@ -20,23 +20,13 @@
     #join-panel button { padding: 12px 40px; background: #0f3460; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: 600; }
     #join-panel .hint { color: #666; font-size: 13px; }
     #status { padding: 8px 12px; background: #111; color: #888; font-size: 12px; flex-shrink: 0; text-align: center; }
-    #screen-container { flex: 1; display: flex; align-items: center; justify-content: center; background: #0a0a0a; touch-action: none; }
+    #screen-container { flex: 1; display: flex; align-items: center; justify-content: center; background: #000; touch-action: none; position: relative; }
     video { width: 100%; height: 100%; object-fit: contain; }
     .placeholder { color: #333; font-size: 16px; text-align: center; padding: 20px; line-height: 1.6; }
     .placeholder small { display: block; margin-top: 8px; font-size: 12px; color: #444; }
-    #chat-toggle { position: fixed; bottom: 12px; right: 12px; z-index: 10; width: 44px; height: 44px; border-radius: 50%; background: #0f3460; color: #fff; border: none; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-    #chat-panel { position: fixed; bottom: 0; left: 0; right: 0; z-index: 9; background: #111; border-top: 1px solid #222; display: none; flex-direction: column; max-height: 50vh; }
-    #chat-panel.open { display: flex; }
-    #chat-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid #222; }
-    #chat-header span { font-size: 14px; font-weight: 600; color: #ccc; }
-    #chat-header button { background: none; border: none; color: #888; font-size: 18px; cursor: pointer; }
-    .chat-messages { flex: 1; overflow-y: auto; padding: 8px 12px; min-height: 80px; }
-    .chat-msg { margin-bottom: 6px; font-size: 13px; color: #ccc; }
-    .chat-sender { font-weight: 600; color: #4a9eff; }
-    .chat-sender.self { color: #e94560; }
-    .chat-input-row { display: flex; padding: 8px 12px; gap: 6px; border-top: 1px solid #222; }
-    .chat-input-row input { flex: 1; padding: 8px; border-radius: 4px; border: 1px solid #333; background: #1a1a1a; color: #eee; font-size: 14px; outline: none; }
-    .chat-input-row button { padding: 8px 14px; background: #0f3460; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
+    #kbd-btn { position: fixed; bottom: 16px; right: 16px; z-index: 10; width: 48px; height: 48px; border-radius: 50%; background: #0f3460; color: #fff; border: none; font-size: 22px; cursor: pointer; display: none; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
+    #kbd-btn.active { background: #e94560; }
+    #kbd-input { position: fixed; left: 0; top: 0; width: 1px; height: 1px; opacity: 0; z-index: -1; }
     @media (max-width: 600px) { #status { font-size: 10px; padding: 4px 8px; } }
   </style>
 </head>
@@ -48,23 +38,13 @@
     <span class="hint">Enter the room code from the Agent</span>
   </div>
 
-  <div id="status">Status: Ready</div>
+  <div id="status">Status: Loading...</div>
   <div id="screen-container">
     <div class="placeholder">Waiting for remote desktop...<br/><small>Connect to a room to begin</small></div>
   </div>
 
-  <button id="chat-toggle" onclick="document.getElementById('chat-panel').classList.toggle('open')">&#128172;</button>
-  <div id="chat-panel">
-    <div id="chat-header">
-      <span>Messages</span>
-      <button onclick="document.getElementById('chat-panel').classList.toggle('open')">&times;</button>
-    </div>
-    <div class="chat-messages" id="chat-messages"></div>
-    <div class="chat-input-row">
-      <input type="text" id="msgInput" placeholder="Type a message..." />
-      <button id="sendBtn">Send</button>
-    </div>
-  </div>
+  <button id="kbd-btn">&#x2328;</button>
+  <input type="text" id="kbd-input" autocomplete="off" autocorrect="off" autocapitalize="off" />
 
   <script type="module">
     import { MessageType, signalUrl } from '/shared/protocol.js';
@@ -72,64 +52,43 @@
     import { WebRTCManager } from '/shared/webrtc.js';
 
     // ---- State ----
-    let signaling, webrtc;
+    let signaling, webrtc, videoEl;
+    let keyboardActive = false;
 
     // ---- DOM refs ----
-    const statusEl = document.getElementById('status');
-    const screenContainer = document.getElementById('screen-container');
-    const roomInput = /** @type {HTMLInputElement} */ (document.getElementById('roomInput'));
-    const connectBtn = document.getElementById('connectBtn');
-    const joinPanel = document.getElementById('join-panel');
-    const chatMessages = document.getElementById('chat-messages');
-    const msgInput = /** @type {HTMLInputElement} */ (document.getElementById('msgInput'));
-    const sendBtn = document.getElementById('sendBtn');
+    const $ = (id) => document.getElementById(id);
+    const statusEl = $('status');
+    const screenContainer = $('screen-container');
+    const roomInput = $('roomInput');
+    const connectBtn = $('connectBtn');
+    const joinPanel = $('join-panel');
+    const kbdBtn = $('kbd-btn');
+    const kbdInput = $('kbd-input');
 
     function setStatus(text) {
       statusEl.textContent = 'Status: ' + text;
     }
 
-    // ---- Chat (inline — mobile chat is simple enough) ----
-    function addMessage(msg, isSelf) {
-      const div = document.createElement('div');
-      div.className = 'chat-msg';
-      div.innerHTML = `<span class="chat-sender${isSelf ? ' self' : ''}">${msg.sender}:</span> ${msg.text}`;
-      chatMessages.appendChild(div);
-      div.scrollIntoView({ behavior: 'smooth' });
-    }
+    setStatus('Ready');
 
-    function sendChat() {
-      const text = msgInput.value.trim();
-      if (!text || !webrtc) return;
-      webrtc.sendData({ sender: 'Client', text, timestamp: Date.now() });
-      addMessage({ sender: 'Client', text }, true);
-      msgInput.value = '';
-    }
-    sendBtn.onclick = sendChat;
-    msgInput.onkeydown = (e) => { if (e.key === 'Enter') sendChat(); };
-
-    // ---- Connect to room ----
-    connectBtn.onclick = () => {
-      const code = roomInput.value.trim().toUpperCase();
-      if (!code) return;
+    // ---- Connect ----
+    function doConnect(code) {
       joinPanel.style.display = 'none';
-      setupConnection(code);
-    };
-    roomInput.onkeydown = (e) => { if (e.key === 'Enter') connectBtn.click(); };
+      setStatus('Connecting...');
 
-    function setupConnection(code) {
       signaling = new SignalingClient({
         url: signalUrl(location.hostname, parseInt(location.port) || 3099),
         onMessage: async (msg) => {
           switch (msg.type) {
             case MessageType.JOIN_SUCCESS:
-              setStatus('Joined room ' + code + ', waiting for agent...');
+              setStatus('Joined, waiting for agent...');
               break;
             case MessageType.JOIN_ERROR:
               setStatus('Join failed: ' + msg.error);
-              showJoinPanel();
+              cleanup();
+              showJoinPanel('Room not found');
               break;
             case MessageType.AGENT_READY:
-              setStatus('Agent found, setting up...');
               setupWebRTC();
               break;
             case MessageType.OFFER:
@@ -154,9 +113,38 @@
 
       signaling.connect();
       signaling.send(MessageType.REGISTER, { role: 'client', room: code });
-      setStatus('Connecting to room ' + code + '...');
     }
 
+    // Connect button
+    connectBtn.onclick = () => {
+      const code = roomInput.value.trim().toUpperCase();
+      if (code.length !== 4) {
+        roomInput.style.borderColor = '#e94560';
+        roomInput.placeholder = 'Enter 4-letter code';
+        setTimeout(() => {
+          roomInput.style.borderColor = '#333';
+          roomInput.placeholder = 'Code';
+        }, 1500);
+        return;
+      }
+      doConnect(code);
+    };
+
+    // Room input: handle both normal typing and IME composition
+    let composing = false;
+    roomInput.addEventListener('compositionstart', () => { composing = true; });
+    roomInput.addEventListener('compositionend', () => {
+      composing = false;
+      const code = roomInput.value.trim().toUpperCase();
+      if (code.length === 4) doConnect(code);
+    });
+    roomInput.addEventListener('input', () => {
+      if (composing) return;
+      const code = roomInput.value.trim().toUpperCase();
+      if (code.length === 4) doConnect(code);
+    });
+
+    // ---- WebRTC ----
     function setupWebRTC() {
       webrtc = new WebRTCManager({
         role: 'client',
@@ -166,16 +154,26 @@
           }
         },
         onTrack: (stream) => {
-          setStatus('Streaming');
+          setStatus('Connected');
           screenContainer.innerHTML = '';
-          const video = document.createElement('video');
-          video.srcObject = stream;
-          video.autoplay = true;
-          video.playsInline = true;
-          video.muted = true;
-          screenContainer.appendChild(video);
+          videoEl = document.createElement('video');
+          videoEl.srcObject = stream;
+          videoEl.autoplay = true;
+          videoEl.playsInline = true;
+          videoEl.muted = true;
+          // Touch events
+          videoEl.addEventListener('touchstart', onTouchStart, { passive: false });
+          videoEl.addEventListener('touchmove', onTouchMove, { passive: false });
+          videoEl.addEventListener('touchend', onTouchEnd, { passive: false });
+          // Mouse events (desktop)
+          videoEl.addEventListener('mousemove', onMouseMove);
+          videoEl.addEventListener('mousedown', onMouseDown);
+          videoEl.addEventListener('mouseup', onMouseUp);
+          videoEl.addEventListener('wheel', onWheel, { passive: false });
+          screenContainer.appendChild(videoEl);
+          kbdBtn.style.display = 'flex';
+          setupKeyboard();
         },
-        onData: (data) => { addMessage(data, false); },
         onStateChange: (state) => {
           if (state === 'failed' || state === 'disconnected') {
             setStatus('Connection lost');
@@ -185,19 +183,141 @@
       });
     }
 
+    // ---- Control helpers ----
+    function sendControl(msg) {
+      if (webrtc) webrtc.sendData(msg);
+    }
+
+    function getVideoRatio(clientX, clientY) {
+      if (!videoEl) return { x: 0, y: 0 };
+      const rect = videoEl.getBoundingClientRect();
+      return {
+        x: Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)),
+        y: Math.max(0, Math.min(1, (clientY - rect.top) / rect.height)),
+      };
+    }
+
+    // ---- Touch handling ----
+    function onTouchStart(e) {
+      e.preventDefault();
+      const t = e.touches[0];
+      const { x, y } = getVideoRatio(t.clientX, t.clientY);
+      sendControl({ type: 'mouse-move', x, y });
+      sendControl({ type: 'mouse-down', button: 'left' });
+    }
+    function onTouchMove(e) {
+      e.preventDefault();
+      const t = e.touches[0];
+      const { x, y } = getVideoRatio(t.clientX, t.clientY);
+      sendControl({ type: 'mouse-move', x, y });
+    }
+    function onTouchEnd(e) {
+      e.preventDefault();
+      sendControl({ type: 'mouse-up', button: 'left' });
+    }
+
+    // ---- Mouse handling ----
+    const BTN = { 0: 'left', 1: 'middle', 2: 'right' };
+    function onMouseMove(e) {
+      const { x, y } = getVideoRatio(e.clientX, e.clientY);
+      sendControl({ type: 'mouse-move', x, y });
+    }
+    function onMouseDown(e) {
+      const { x, y } = getVideoRatio(e.clientX, e.clientY);
+      sendControl({ type: 'mouse-move', x, y });
+      sendControl({ type: 'mouse-down', button: BTN[e.button] || 'left' });
+    }
+    function onMouseUp(e) {
+      sendControl({ type: 'mouse-up', button: BTN[e.button] || 'left' });
+    }
+    function onWheel(e) {
+      e.preventDefault();
+      sendControl({ type: 'mouse-wheel', deltaX: e.deltaX, deltaY: e.deltaY });
+    }
+
+    // ---- Keyboard ----
+    function setupKeyboard() {
+      kbdBtn.onclick = () => {
+        if (keyboardActive) {
+          kbdInput.blur();
+        } else {
+          kbdInput.value = '';
+          kbdInput.focus();
+        }
+      };
+
+      kbdInput.addEventListener('focus', () => {
+        keyboardActive = true;
+        kbdBtn.classList.add('active');
+      });
+      kbdInput.addEventListener('blur', () => {
+        keyboardActive = false;
+        kbdBtn.classList.remove('active');
+      });
+
+      let pendingKey = null;
+
+      kbdInput.addEventListener('keydown', (e) => {
+        if (e.keyCode === 229 || e.key === 'Unidentified' || e.key === 'Process') {
+          pendingKey = null;
+          e.preventDefault();
+          return;
+        }
+        pendingKey = e.key;
+        sendControl({ type: 'key-down', key: e.key, code: e.code, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, altKey: e.altKey, metaKey: e.metaKey });
+        e.preventDefault();
+      });
+
+      kbdInput.addEventListener('keyup', (e) => {
+        if (e.keyCode === 229 || e.key === 'Unidentified' || e.key === 'Process') {
+          e.preventDefault();
+          return;
+        }
+        sendControl({ type: 'key-up', key: e.key, code: e.code, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, altKey: e.altKey, metaKey: e.metaKey });
+        pendingKey = null;
+        e.preventDefault();
+      });
+
+      kbdInput.addEventListener('beforeinput', (e) => {
+        if (pendingKey !== null) return;
+        if (e.inputType === 'insertText' && e.data) {
+          for (const ch of e.data) {
+            sendControl({ type: 'key-down', key: ch, code: '', shiftKey: false, ctrlKey: false, altKey: false, metaKey: false });
+            sendControl({ type: 'key-up', key: ch, code: '', shiftKey: false, ctrlKey: false, altKey: false, metaKey: false });
+          }
+        }
+        e.preventDefault();
+      });
+    }
+
+    // ---- Cleanup ----
     function cleanup() {
       if (webrtc) { webrtc.destroy(); webrtc = null; }
       if (signaling) { signaling.disconnect(); signaling = null; }
+      videoEl = null;
+      kbdBtn.style.display = 'none';
+      kbdBtn.classList.remove('active');
+      keyboardActive = false;
+      kbdInput.blur();
     }
 
     function showPlaceholder() {
       screenContainer.innerHTML = '<div class="placeholder">Waiting for remote desktop...<br/><small>Connect to a room to begin</small></div>';
     }
 
-    function showJoinPanel() {
+    function showJoinPanel(error) {
       cleanup();
       showPlaceholder();
       joinPanel.style.display = 'flex';
+      roomInput.value = '';
+      if (error) {
+        roomInput.style.borderColor = '#e94560';
+        roomInput.placeholder = error;
+        setTimeout(() => {
+          roomInput.style.borderColor = '#333';
+          roomInput.placeholder = 'Code';
+        }, 2000);
+      }
     }
   </script>
 </body>

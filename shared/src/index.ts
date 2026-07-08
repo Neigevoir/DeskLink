@@ -24,5 +24,10 @@ export type { SignalingState, SignalingClientOptions } from './signaling';
 export { WebRTCManager } from './webrtc';
 export type { WebRTCRole, WebRTCState, WebRTCManagerOptions } from './webrtc';
 
-export { createChatMessage } from './chat';
-export type { ChatMessage } from './chat';
+export type {
+  MouseMovePayload,
+  MouseButtonPayload,
+  MouseWheelPayload,
+  KeyPayload,
+  ControlMessage,
+} from './control';

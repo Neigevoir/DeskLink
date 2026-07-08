@@ -1,4 +1,4 @@
-import { CONFIG } from './protocol';
+import { CONFIG } from './protocol.js';
 
 export type WebRTCRole = 'agent' | 'client';
 export type WebRTCState = 'new' | 'connecting' | 'connected' | 'failed' | 'disconnected' | 'closed';
@@ -57,7 +57,7 @@ export class WebRTCManager {
     };
 
     if (this.#role === 'agent') {
-      this.#channel = this.#pc.createDataChannel('chat');
+      this.#channel = this.#pc.createDataChannel('control');
       this.#setupChannel();
     } else {
       this.#pc.ondatachannel = (event) => {
@@ -121,8 +121,6 @@ export class WebRTCManager {
     }
     this.#onStateChange('closed');
   }
-
-  // ---- Private ----
 
   #setupChannel(): void {
     if (!this.#channel) return;

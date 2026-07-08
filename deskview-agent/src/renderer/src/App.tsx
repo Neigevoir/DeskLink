@@ -1,41 +1,38 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   MessageType,
   SignalingClient,
   WebRTCManager,
-  createChatMessage,
   signalUrl,
 } from '@desklink/shared';
-import type { ChatMessage, SignalMessage, SignalingState } from '@desklink/shared';
+import type { ControlMessage, SignalMessage, SignalingState } from '@desklink/shared';
 import AgentView from './components/AgentView';
-import ChatView from './components/ChatView';
 
 export default function App() {
   const signalingRef = useRef<SignalingClient | null>(null);
   const webrtcRef = useRef<WebRTCManager | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
 
-  const [sources, setSources] = useState<ScreenSource[]>([]);
   const [status, setStatus] = useState('Disconnected');
   const [roomCode, setRoomCode] = useState('');
   const [isSharing, setIsSharing] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [previewStream, setPreviewStream] = useState<MediaStream | null>(null);
 
-  useEffect(() => {
-    window.electronAPI.getScreenSources().then(setSources);
-  }, []);
-
-  const handleStart = useCallback(async (sourceId: string) => {
-    if (!sourceId) return;
-
+  const handleStart = useCallback(async () => {
     try {
+      const sources = await window.electronAPI.getScreenSources();
+      const screen = sources[0];
+      if (!screen) {
+        setStatus('Error: No screen source found');
+        return;
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
         video: {
           mandatory: {
             chromeMediaSource: 'desktop',
-            chromeMediaSourceId: sourceId,
+            chromeMediaSourceId: screen.id,
           },
         } as unknown as MediaTrackConstraints,
       });
@@ -52,7 +49,29 @@ export default function App() {
           }
         },
         onData: (data) => {
-          setMessages((prev) => [...prev, data as unknown as ChatMessage]);
+          const msg = data as unknown as ControlMessage;
+          switch (msg.type) {
+            case 'mouse-move':
+              window.electronAPI.mouseMove(msg.x, msg.y);
+              break;
+            case 'mouse-down':
+              window.electronAPI.mouseToggle('down', msg.button);
+              break;
+            case 'mouse-up':
+              window.electronAPI.mouseToggle('up', msg.button);
+              break;
+            case 'mouse-wheel':
+              window.electronAPI.mouseScroll(msg.deltaX, msg.deltaY);
+              break;
+            case 'key-down':
+              window.electronAPI.keyToggle(msg.code, msg.key, 'down',
+                msg.shiftKey, msg.ctrlKey, msg.altKey, msg.metaKey);
+              break;
+            case 'key-up':
+              window.electronAPI.keyToggle(msg.code, msg.key, 'up',
+                msg.shiftKey, msg.ctrlKey, msg.altKey, msg.metaKey);
+              break;
+          }
         },
         onStateChange: (state) => setStatus('WebRTC: ' + state),
       });
@@ -111,16 +130,9 @@ export default function App() {
     setStatus('Disconnected');
   }, []);
 
-  const handleChatSend = useCallback((text: string) => {
-    const msg = createChatMessage('Agent', text);
-    webrtcRef.current?.sendData(msg as unknown as Record<string, unknown>);
-    setMessages((prev) => [...prev, msg]);
-  }, []);
-
   return (
     <>
       <AgentView
-        sources={sources}
         roomCode={roomCode}
         status={status}
         isSharing={isSharing}
@@ -128,7 +140,6 @@ export default function App() {
         onStart={handleStart}
         onStop={handleStop}
       />
-      <ChatView messages={messages} senderName="Agent" onSend={handleChatSend} />
     </>
   );
 }

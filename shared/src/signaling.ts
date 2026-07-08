@@ -1,4 +1,4 @@
-import { CONFIG, createMessage, type SignalMessage } from './protocol';
+import { CONFIG, createMessage, type SignalMessage } from './protocol.js';
 
 export type SignalingState = 'connecting' | 'connected' | 'disconnected';
 
